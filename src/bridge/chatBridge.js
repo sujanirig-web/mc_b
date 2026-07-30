@@ -1,17 +1,17 @@
 // ─────────────────────────────────────────────
 //  chatBridge.js — connects Discord ↔ Minecraft
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────npm 
 
 const {
   handlePlayers, handlePos, handleHealth,
   handleSay, handleStartServer, handleStopServer, handleReconnect, handleDisconnect,
 } = require('../discord/commands');
 
-const { getBot, reconnect, disconnectAndPauseRejoin, isBotOnline } = require('../bot/minecraft');
+const { getBot, reconnect, disconnectAndPauseRejoin, isBotOnline } = require('../bot/index.js');
 const { EmbedBuilder } = require('discord.js');
 const { EMOJI, EMBED_COLOR } = require('../utils/formatters');
 
-// USE NATIVE NET (No libraries to break, no "not a function" errors)
+// USE NATIVE NET (No libraries to break, no "not a function" errors) 
 const net = require('net');
 
 const PREFIX = process.env.COMMAND_PREFIX || '!';

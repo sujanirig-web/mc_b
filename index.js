@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { createDiscordClient, sendEmbed } = require('./src/discord/client');
-const { init: initMinecraft } = require('./src/bot/minecraft');
+const { init: initMinecraft } = require('./src/bot/index.js');
 const { setupBridge } = require('./src/bridge/chatBridge');
 
 const discordClient = createDiscordClient();
