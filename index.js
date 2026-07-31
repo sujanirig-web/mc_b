@@ -1,13 +1,17 @@
 require('dotenv').config();
+
 const { createDiscordClient, sendEmbed } = require('./src/discord/client');
 const { init: initMinecraft } = require('./src/bot/index.js');
 const { setupBridge } = require('./src/bridge/chatBridge');
+const state = require('./src/bot/state'); // <-- Added
 
 const discordClient = createDiscordClient();
 
-// FIX: Added 'async' to the ready listener
 discordClient.once('ready', async () => {
-  // FIX: Wrapped in a try/catch to prevent the bot from crashing if a message fails
+
+  // Save Discord client so other modules (dashboard, etc.) can use it
+  state.discordClient = discordClient;
+
   const embed = async (e, targetId) => {
     try {
       await sendEmbed(discordClient, e, targetId);

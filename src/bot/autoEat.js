@@ -1,3 +1,5 @@
+// src/bot/autoEat.js
+
 function configureAutoEat(bot) {
   if (!bot.autoEat) {
     console.log("[AutoEat] Plugin not loaded.");
@@ -5,8 +7,8 @@ function configureAutoEat(bot) {
   }
 
   bot.autoEat.options = {
-    priority: "saturation", // Prefer better foods
-    startAt: 16,            // Eat when hunger drops below 16 (8 shanks)
+    priority: "foodPoints",
+    startAt: 18,
     bannedFood: [
       "rotten_flesh",
       "spider_eye",
@@ -15,9 +17,30 @@ function configureAutoEat(bot) {
       "chorus_fruit"
     ]
   };
+console.log(bot.autoEat);
+console.log(
+  "Methods:",
+  Object.getOwnPropertyNames(Object.getPrototypeOf(bot.autoEat))
+);
+  // Enable plugin
+  bot.autoEat.enable();
+
+  // Enable again after inventory finishes syncing
+  setTimeout(() => {
+    if (bot.autoEat) {
+      bot.autoEat.enable();
+      console.log("[AutoEat] Re-enabled after spawn.");
+    }
+  }, 3000);
+
+  console.log("[AutoEat] Enabled.");
+
+  // =========================
+  // Debug Events
+  // =========================
 
   bot.on("autoeat_started", () => {
-    console.log("[AutoEat] Eating...");
+    console.log("[AutoEat] Started eating...");
   });
 
   bot.on("autoeat_finished", () => {
@@ -28,9 +51,31 @@ function configureAutoEat(bot) {
     console.log("[AutoEat] Error:", err.message);
   });
 
-  bot.autoEat.enable();
+  // Print health/hunger whenever it changes
+  bot.on("health", () => {
+    console.log(
+      `[Health] HP=${bot.health} Food=${bot.food} Saturation=${bot.foodSaturation}`
+    );
+  });
 
-  console.log("[AutoEat] Enabled.");
+  // Show inventory every 10 seconds
+  setInterval(() => {
+    const foods = bot.inventory
+      .items()
+      .filter(item => item.foodPoints != null);
+
+    console.log("========== INVENTORY ==========");
+
+    if (foods.length === 0) {
+      console.log("No edible food found.");
+    } else {
+      foods.forEach(food => {
+        console.log(`- ${food.name} x${food.count}`);
+      });
+    }
+
+    console.log("===============================");
+  }, 10000);
 }
 
 module.exports = {

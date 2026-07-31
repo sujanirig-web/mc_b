@@ -12,6 +12,11 @@ const { startAntiAfk } = require('./antiAfk');
 const { statusEmbed } = require('../discord/embeds');
 const { initSleep, sleepWithPlayer } = require('./sleep');
 const { avoidCreepers } = require('./creeper');
+const { useShield } = require('./shield');
+const { startDashboardUpdater } = require('../dashboard/updater');
+
+
+
 async function createBot() {
   if (state.isConnecting) return;
   state.isConnecting = true;
@@ -23,13 +28,15 @@ async function createBot() {
   }
 
   // Load auto-eat plugin dynamically
-  let autoeat;
-  try {
-    const autoeatModule = await import('mineflayer-auto-eat');
-    autoeat = autoeatModule.default?.plugin || autoeatModule.plugin || autoeatModule.default;
-  } catch (err) {
-    console.error('[Minecraft] ❌ Auto-eat import failed:', err.message);
-  }
+ // Load auto-eat plugin
+let autoeat;
+
+try {
+  autoeat = require("mineflayer-auto-eat").plugin;
+  console.log("[AutoEat] Plugin found.");
+} catch (err) {
+  console.error("[AutoEat] Failed to load:", err.message);
+}
 
   const bot = mineflayer.createBot({
     host: process.env.MC_HOST,
@@ -47,8 +54,11 @@ async function createBot() {
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvp);
   bot.loadPlugin(armorManager);
-  if (typeof autoeat === 'function') bot.loadPlugin(autoeat);
-
+  if (autoeat) {
+    bot.loadPlugin(autoeat);
+    console.log("[AutoEat] Plugin loaded.");
+}
+console.log("bot.autoEat =", bot.autoEat);
   state.currentBot = bot;
 
   bot.on('login', () => {
@@ -95,7 +105,22 @@ bot.on('error', (err) => {
     avoidCreepers(bot);
 }, 1000);
 
+setInterval(() => {
+    useShield(bot);
+}, 150);
 
+const THREAD_ID = process.env.DISCORD_DASHBOARD_THREAD_ID;
+
+if (state.discordClient && THREAD_ID) {
+    startDashboardUpdater(
+        bot,
+        state.discordClient,
+        THREAD_ID,
+        5000
+    );
+
+    console.log("[Dashboard] Started.");
+}
 
 const player = bot.nearestEntity(
   e => e.type === 'player' && e.username !== bot.username

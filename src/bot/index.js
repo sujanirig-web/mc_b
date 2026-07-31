@@ -4,6 +4,7 @@ const { createBot } = require('./createBot');
 const reconnectModule = require('./reconnect');
 const { isBotOnline, getBot } = require('./status');
 
+
 function init(discordClient, sendEmbedFn) {
   state.discordClient = discordClient;
   state.sendEmbedFn = sendEmbedFn;

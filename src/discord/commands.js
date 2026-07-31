@@ -195,7 +195,7 @@ function handleDisconnect(member, disconnectFn) {
 
   return new EmbedBuilder()
     .setColor(EMBED_COLOR.disconnect)
-    .setDescription(`${EMOJI.disconnect} **Disconnecting bot and pausing rejoin.**`);
+    .setDescription(`${EMOJI.disconnect} **dont do that fuck ass hayato.**`);
 }
 
 module.exports = {
