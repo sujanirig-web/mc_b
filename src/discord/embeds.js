@@ -1,85 +1,186 @@
 // ─────────────────────────────────────────────
-//  embeds.js — Discord embed builders
+// embeds.js — Discord embed builders
+// Modernized & consistent embed styling
 // ─────────────────────────────────────────────
 
 const { EmbedBuilder } = require('discord.js');
-const { getAvatarUrl, EMBED_COLOR, EMOJI } = require('../utils/formatters');
+const {
+  getAvatarUrl,
+  EMBED_COLOR,
+  EMOJI,
+} = require('../utils/formatters');
 
-// Chat message embed — shows player avatar + message
+// ---- Extended colors & emojis for new event types ----
+const COLOR = {
+  ...EMBED_COLOR,
+  advancement: 0xF1C40F, // gold
+  goal: 0x2ECC71,        // green
+  challenge: 0xE67E22,   // orange
+  action: 0x8E44AD,      // purple
+  system: 0x95A5A6,      // grey
+};
+
+const EMOJIS = {
+  ...EMOJI,
+  advancement: '🏆',
+  goal: '🎯',
+  challenge: '⚔️',
+  action: '💬',
+  system: '📢',
+};
+
+/**
+ * Base embed with consistent footer and timestamp.
+ */
+function baseEmbed(color, options = {}) {
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setFooter({
+      text: 'MC Bridge • Discord ↔ Minecraft',
+    })
+    .setTimestamp();
+
+  if (options.title) embed.setTitle(options.title);
+  if (options.description) embed.setDescription(options.description);
+  if (options.author) embed.setAuthor(options.author);
+  if (options.fields) embed.addFields(options.fields);
+
+  return embed;
+}
+
+// ---- Core embed builders (unchanged signatures) ----
+
 function chatEmbed(username, message) {
-  return new EmbedBuilder()
-    .setColor(EMBED_COLOR.chat)
-    .setAuthor({
-      name: `${username}`,
+  return baseEmbed(COLOR.chat, {
+    author: {
+      name: username,
       iconURL: getAvatarUrl(username),
-    })
-    .setDescription(message)
-    .setTimestamp();
+    },
+    description: message,
+  });
 }
 
-// Death message embed
 function deathEmbed(deathMessage) {
-  return new EmbedBuilder()
-    .setColor(EMBED_COLOR.death)
-    .setAuthor({ name: `${EMOJI.death} Death` })
-    .setDescription(`\`${deathMessage}\``)
-    .setTimestamp();
+  return baseEmbed(COLOR.death, {
+    title: `${EMOJIS.death} Player Death`,
+    description: deathMessage,
+  });
 }
 
-// Player joined embed
 function joinEmbed(username) {
-  return new EmbedBuilder()
-    .setColor(EMBED_COLOR.join)
-    .setAuthor({
-      name: `${EMOJI.join} ${username} joined the server`,
+  return baseEmbed(COLOR.join, {
+    title: `${EMOJIS.join} Player Joined`,
+    author: {
+      name: username,
       iconURL: getAvatarUrl(username),
-    })
-    .setTimestamp();
+    },
+    description: `**${username}** joined the Minecraft server.`,
+  });
 }
 
-// Player left embed
 function leaveEmbed(username) {
-  return new EmbedBuilder()
-    .setColor(EMBED_COLOR.leave)
-    .setAuthor({
-      name: `${EMOJI.leave} ${username} left the server`,
+  return baseEmbed(COLOR.leave, {
+    title: `${EMOJIS.leave} Player Left`,
+    author: {
+      name: username,
       iconURL: getAvatarUrl(username),
-    })
-    .setTimestamp();
+    },
+    description: `**${username}** left the Minecraft server.`,
+  });
 }
 
-// Server broadcast / ops message embed
 function broadcastEmbed(message) {
-  return new EmbedBuilder()
-    .setColor(EMBED_COLOR.broadcast)
-    .setAuthor({ name: `${EMOJI.broadcast} Server Broadcast` })
-    .setDescription(`\`${message}\``)
-    .setTimestamp();
+  return baseEmbed(COLOR.broadcast, {
+    title: `${EMOJIS.broadcast} Server Broadcast`,
+    description: message,
+  });
 }
 
-// Whisper embed — someone /tell'd the bot
 function whisperEmbed(username, message) {
-  return new EmbedBuilder()
-    .setColor(EMBED_COLOR.whisper)
-    .setAuthor({
-      name: `${EMOJI.whisper} Whisper from ${username}`,
+  return baseEmbed(COLOR.whisper, {
+    title: `${EMOJIS.whisper} Private Message`,
+    author: {
+      name: username,
       iconURL: getAvatarUrl(username),
-    })
-    .setDescription(`\`${message}\``)
-    .setTimestamp();
+    },
+    fields: [
+      { name: 'From', value: username, inline: true },
+      { name: 'Message', value: message },
+    ],
+  });
 }
 
-// Bot connect / disconnect status embed
 function statusEmbed(connected, reason = '') {
-  const type = connected ? 'connect' : 'disconnect';
-  return new EmbedBuilder()
-    .setColor(EMBED_COLOR[type])
-    .setDescription(
-      connected
-        ? `${EMOJI.connect} **Bot connected to Minecraft.**`
-        : `${EMOJI.disconnect} **Bot disconnected.** ${reason ? `\nReason: \`${reason}\`` : ''}`
-    )
-    .setTimestamp();
+  if (connected) {
+    return baseEmbed(COLOR.connect, {
+      title: `${EMOJIS.connect} Bot Online`,
+      description: 'Successfully connected to the Minecraft server.',
+    });
+  }
+
+  const embed = baseEmbed(COLOR.disconnect, {
+    title: `${EMOJIS.disconnect} Bot Offline`,
+    description: 'The bot has disconnected from the Minecraft server.',
+  });
+
+  if (reason) {
+    embed.addFields({ name: 'Reason', value: `\`${reason}\`` });
+  }
+
+  return embed;
+}
+
+// ---- New embed builders for additional event types ----
+
+function advancementEmbed(username, advancement) {
+  return baseEmbed(COLOR.advancement, {
+    title: `${EMOJIS.advancement} Advancement`,
+    author: {
+      name: username,
+      iconURL: getAvatarUrl(username),
+    },
+    description: `**${username}** has made the advancement **${advancement}**.`,
+  });
+}
+
+function goalEmbed(username, goal) {
+  return baseEmbed(COLOR.goal, {
+    title: `${EMOJIS.goal} Goal Achieved`,
+    author: {
+      name: username,
+      iconURL: getAvatarUrl(username),
+    },
+    description: `**${username}** has achieved **${goal}**.`,
+  });
+}
+
+function challengeEmbed(username, challenge) {
+  return baseEmbed(COLOR.challenge, {
+    title: `${EMOJIS.challenge} Challenge Completed`,
+    author: {
+      name: username,
+      iconURL: getAvatarUrl(username),
+    },
+    description: `**${username}** has completed the challenge **${challenge}**.`,
+  });
+}
+
+function actionEmbed(username, action) {
+  return baseEmbed(COLOR.action, {
+    title: `${EMOJIS.action} Action`,
+    author: {
+      name: username,
+      iconURL: getAvatarUrl(username),
+    },
+    description: `*${username} ${action}*`,
+  });
+}
+
+function systemEmbed(message) {
+  return baseEmbed(COLOR.system, {
+    title: `${EMOJIS.system} System Message`,
+    description: message,
+  });
 }
 
 module.exports = {
@@ -90,4 +191,9 @@ module.exports = {
   broadcastEmbed,
   whisperEmbed,
   statusEmbed,
+  advancementEmbed,
+  goalEmbed,
+  challengeEmbed,
+  actionEmbed,
+  systemEmbed,
 };

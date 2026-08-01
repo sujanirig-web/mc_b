@@ -123,7 +123,7 @@ function setupBridge(discordClient, sendEmbed) {
 function notConnectedEmbed() {
   return new EmbedBuilder()
     .setColor(EMBED_COLOR.disconnect)
-    .setDescription(`${EMOJI.disconnect} dont do that fuck ass hayato.`);
+    .setDescription(`${EMOJI.disconnect} server is offline, start the server first`);
 }
 
 function dumbfuckEmbed() {
