@@ -1,6 +1,8 @@
-// src/bot/sleep.js
-const { Vec3 } = require('vec3');
+// src/bot/sleep.
+const brain = require("./brain");
 
+let sleepingTask = false;
+let sleepInterval = null;
 let botInstance = null;
 let isSleeping = false;
 let followPlayer = null;          // the player we are following (to detect their sleep state)
@@ -11,21 +13,28 @@ let followPlayer = null;          // the player we are following (to detect thei
  */
 function initSleep(bot, playerName) {
   botInstance = bot;
-  followPlayer = playerName;
-  isSleeping = false;
+followPlayer = playerName;
 
+isSleeping = false;
+sleepingTask = false;
   // Wake up if the bot is forced out of bed (e.g., by being attacked)
   bot.on('wake', () => {
     if (isSleeping) {
-      console.log('[Sleep] Woke up');
-      isSleeping = false;
+        console.log('[Sleep] Woke up');
+
+        isSleeping = false;
+        sleepingTask = false;
+
+        brain.setState(brain.State.FOLLOW);
     }
-  });
+});
 
   // If the bot dies, ensure sleep state is reset
-  bot.on('death', () => {
+ bot.on('death', () => {
     isSleeping = false;
-  });
+    sleepingTask = false;
+    brain.setState(brain.State.FOLLOW);
+});
 }
 
 /**
@@ -47,11 +56,25 @@ async function trySleep() {
   if (isSleeping) return true;          // already sleeping
   if (!botInstance) return false;
 
+  if (
+  brain.is(brain.State.PVP) ||
+  brain.is(brain.State.ESCAPE) ||
+  brain.is(brain.State.EAT) ||
+  brain.is(brain.State.BRIDGE)
+) {
+  return false;
+}
+if (sleepingTask)
+  return false;
+
+sleepingTask = true;
   // Check if the bot is already in bed (shouldn't happen, but safety)
   if (botInstance.isSleeping) {
     isSleeping = true;
+    sleepingTask = false;
+    brain.setState(brain.State.SLEEP);
     return true;
-  }
+}
 
   // Find a bed nearby
   const bed = botInstance.findBlock({
@@ -60,20 +83,27 @@ async function trySleep() {
   });
 
   if (!bed) {
+    sleepingTask = false;
     console.log('[Sleep] No bed nearby');
     return false;
-  }
+}
 
   try {
     console.log('[Sleep] Attempting to sleep...');
     await botInstance.sleep(bed);
-    isSleeping = true;
-    console.log('[Sleep] Now sleeping');
-    return true;
+
+isSleeping = true;
+sleepingTask = false;
+
+brain.setState(brain.State.SLEEP);
+
+console.log('[Sleep] Now sleeping');
+return true;
   } catch (err) {
     console.log(`[Sleep] Failed to sleep: ${err.message}`);
-    isSleeping = false;
-    return false;
+   isSleeping = false;
+sleepingTask = false;
+return false;
   }
 }
 
@@ -85,6 +115,8 @@ function wakeUp() {
   try {
     botInstance.wake();
     isSleeping = false;
+    brain.setState(brain.State.FOLLOW);
+sleepingTask = false;
     console.log('[Sleep] Woke up');
   } catch (err) {
     console.log(`[Sleep] Failed to wake: ${err.message}`);

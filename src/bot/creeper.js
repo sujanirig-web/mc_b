@@ -1,6 +1,8 @@
 // src/bot/creeper.js
+// src/bot/creeper.js
 
 const { goals: { GoalNear } } = require('mineflayer-pathfinder');
+const Brain = require('./brain');
 
 let evading = false;
 let evadeInterval = null;
@@ -8,19 +10,30 @@ let evadeInterval = null;
 // =====================
 // CONFIG
 // =====================
-const DETECT_DISTANCE = 8;      // Start escaping
-const SAFE_DISTANCE = 15;       // Stop escaping
-const RUN_DISTANCE = 10;        // Run this far away
-const EVADE_UPDATE = 500;       // Update every 500ms
+const DETECT_DISTANCE = 8;
+const SAFE_DISTANCE = 15;
+const RUN_DISTANCE = 10;
+const EVADE_UPDATE = 500;
 
 // =====================
-// Main Function
+// Public
 // =====================
 function avoidCreepers(bot) {
+
   // Already escaping
   if (evading) return;
 
+  // Don't interrupt higher-priority actions
+  if (
+    Brain.is(Brain.State.PVP) ||
+    Brain.is(Brain.State.EAT) ||
+    Brain.is(Brain.State.BRIDGE)
+  ) {
+    return;
+  }
+
   const creeper = getNearestCreeper(bot);
+
   if (!creeper) return;
 
   const distance = bot.entity.position.distanceTo(creeper.position);
@@ -33,41 +46,61 @@ function avoidCreepers(bot) {
 }
 
 // =====================
-// Start Evading
+// Start Escape
 // =====================
 function startEvading(bot) {
+
   if (evading) return;
 
   evading = true;
 
+  Brain.setState(Brain.State.ESCAPE);
+
   console.log("[Creeper] Running away...");
 
+  if (evadeInterval)
+    clearInterval(evadeInterval);
+
   evadeInterval = setInterval(() => {
+
+    if (!bot.entity) {
+      stopEvading(bot);
+      return;
+    }
 
     const creeper = getNearestCreeper(bot);
 
     // Creeper gone
     if (!creeper) {
-      stopEvading();
+      stopEvading(bot);
       return;
     }
 
-    const distance = bot.entity.position.distanceTo(creeper.position);
+    const distance =
+      bot.entity.position.distanceTo(creeper.position);
 
-    // Safe distance reached
+    // Safe now
     if (distance >= SAFE_DISTANCE) {
-      stopEvading();
+      stopEvading(bot);
       return;
     }
 
-    // Calculate direction opposite of creeper
-    const dx = bot.entity.position.x - creeper.position.x;
-    const dz = bot.entity.position.z - creeper.position.z;
+    // Run opposite direction
+    const dx =
+      bot.entity.position.x - creeper.position.x;
 
-    const length = Math.sqrt(dx * dx + dz * dz) || 1;
+    const dz =
+      bot.entity.position.z - creeper.position.z;
 
-    const runX = bot.entity.position.x + (dx / length) * RUN_DISTANCE;
-    const runZ = bot.entity.position.z + (dz / length) * RUN_DISTANCE;
+    const len = Math.sqrt(dx * dx + dz * dz) || 1;
+
+    const runX =
+      bot.entity.position.x +
+      (dx / len) * RUN_DISTANCE;
+
+    const runZ =
+      bot.entity.position.z +
+      (dz / len) * RUN_DISTANCE;
 
     bot.pathfinder.setGoal(
       new GoalNear(
@@ -75,35 +108,49 @@ function startEvading(bot) {
         bot.entity.position.y,
         runZ,
         1
-      )
+      ),
+      false
     );
 
   }, EVADE_UPDATE);
 }
 
 // =====================
-// Stop Evading
+// Stop Escape
 // =====================
-function stopEvading() {
+function stopEvading(bot) {
+
   if (!evading) return;
+
+  evading = false;
 
   clearInterval(evadeInterval);
   evadeInterval = null;
-  evading = false;
 
-  console.log("[Creeper] ✅ Safe. Returning to follow.");
+  bot.pathfinder.setGoal(null);
+
+  Brain.setState(Brain.State.IDLE);
+
+  console.log("[Creeper] ✅ Safe. Returning to normal.");
 }
 
 // =====================
-// Find Nearest Creeper
+// Helpers
 // =====================
 function getNearestCreeper(bot) {
+
   return bot.nearestEntity(entity =>
     entity &&
     entity.name === "creeper"
   );
+
+}
+
+function isEvading() {
+  return evading;
 }
 
 module.exports = {
-  avoidCreepers
+  avoidCreepers,
+  isEvading
 };

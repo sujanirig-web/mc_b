@@ -2,6 +2,7 @@
 const { pathfinder, Movements, goals: { GoalFollow, GoalNear } } = require('mineflayer-pathfinder');
 const { Vec3 } = require('vec3');
 const state = require('./state');
+const brain = require("./brain");
 
 // ---------- Configuration ----------
 const BRIDGE_BLOCK_TYPES = ['planks', 'stone', 'cobblestone', 'dirt', 'grass'];
@@ -332,36 +333,86 @@ function performBridge(bot, target) {
 
 // ---------- Main Following Loop ----------
 function startFollowing(bot) {
+  console.log("[Movement] startFollowing() called");
   if (state.followInterval) clearInterval(state.followInterval);
+state.followInterval = setInterval(() => {
 
-  state.followInterval = setInterval(() => {
-    if (
-      !state.currentBot ||
-      state.currentBot !== bot ||
-      bot.pvp?.target ||
-      bot.isSleeping ||
-      !state.wasConnected
-    ) return;
+    console.log("========== FOLLOW LOOP ==========");
 
-    // If we are bridging, skip the follow goal so that the bridge can take control.
-    if (isBridging) return;
-
-    const target = bot.nearestEntity(
-      e => e.type === 'player' && e.username !== bot.username
-    );
-
-    if (!target) {
-      state.currentFollowTarget = null;
-      bot.pathfinder.setGoal(null);
-      return;
+    if (!state.currentBot) {
+        console.log("No currentBot");
+        return;
     }
 
-    // Check if we are stuck and need to bridge
-    shouldBridge(bot, target);
+    if (state.currentBot !== bot) {
+        console.log("Wrong bot instance");
+        return;
+    }
 
-    // Always set the follow goal (unless bridging is active)
+    if (!state.wasConnected) {
+        console.log("Not connected");
+        return;
+    }
+
+    console.log("Passed connection checks");
+
+    if (brain.is(brain.State.PVP)) {
+        console.log("Blocked by PVP");
+        return;
+    }
+
+    if (brain.is(brain.State.ESCAPE)) {
+        console.log("Blocked by ESCAPE");
+        return;
+    }
+
+    if (brain.is(brain.State.SLEEP)) {
+        console.log("Blocked by SLEEP");
+        return;
+    }
+
+    if (brain.is(brain.State.BRIDGE)) {
+        console.log("Blocked by BRIDGE");
+        return;
+    }
+
+    console.log("Passed brain checks");
+
+    if (isBridging) {
+        console.log("Currently bridging");
+        return;
+    }
+
+    console.log("Looking for target...");
+
+    const target = bot.nearestEntity(
+        e => e.type === "player" && e.username !== bot.username
+    );
+
+    console.log("Target =", target?.username);
+
+if (!target) {
+    console.log("No player found.");
+    state.currentFollowTarget = null;
+    bot.pathfinder.setGoal(null);
+    brain.setState(brain.State.IDLE);
+    return;
+}
+
+console.log("Following", target.username);
+
+state.currentFollowTarget = target;
+brain.setState(brain.State.FOLLOW);
+
+// Check if we need to bridge
+shouldBridge(bot, target);
+
+// If we're already bridging, don't overwrite the bridge goal
+if (!isBridging) {
     bot.pathfinder.setGoal(new GoalFollow(target, 3), true);
-  }, 1000);
+}
+
+}, 1000);
 }
 
 function stopFollowing() {

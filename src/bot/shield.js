@@ -1,135 +1,145 @@
 // src/bot/shield.js
 
-const { GoalFollow } = require('mineflayer-pathfinder').goals;
+const brain = require("./brain");
 
-const HOSTILE_MOBS = [
-  "zombie",
-  "husk",
-  "drowned",
-  "zombie_villager",
-  "skeleton",
-  "stray",
-  "pillager",
-  "vindicator",
-  "evoker",
-  "ravager",
-  "piglin",
-  "piglin_brute",
-  "wither_skeleton",
-  "creeper"
-];
+let shieldRaised = false;
+let updateInterval = null;
 
-let blocking = false;
-let equipping = false;
-
-function getNearestThreat(bot) {
-  return bot.nearestEntity(entity => {
-    if (!entity) return false;
-    if (!HOSTILE_MOBS.includes(entity.name)) return false;
-
-    const dist = bot.entity.position.distanceTo(entity.position);
-
-    if (entity.name.includes("skeleton")) return dist <= 10;
-    if (entity.name === "creeper") return dist <= 8;
-
-    return dist <= 3;
-  });
-}
-
+/**
+ * Equip shield into offhand
+ */
 async function equipShield(bot) {
-  if (equipping) return;
+    const shield = bot.inventory.items().find(item => item.name === "shield");
 
-  const offhand = bot.inventory.slots[45];
+    if (!shield) return false;
 
-  if (offhand && offhand.name === "shield")
-    return true;
-
-  const shield = bot.inventory.items().find(i => i.name === "shield");
-
-  if (!shield)
-    return false;
-
-  equipping = true;
-
-  try {
-    await bot.equip(shield, "off-hand");
-    console.log("[Shield] Equipped shield");
-  } catch (err) {
-    console.log("[Shield] Equip failed:", err.message);
-  }
-
-  equipping = false;
-
-  return bot.inventory.slots[45]?.name === "shield";
+    try {
+        await bot.equip(shield, "off-hand");
+        return true;
+    } catch (err) {
+        console.log("[Shield] Failed to equip:", err.message);
+        return false;
+    }
 }
 
-async function useShield(bot) {
+/**
+ * Raise shield
+ */
+function raiseShield(bot) {
 
-  const threat = getNearestThreat(bot);
+    if (shieldRaised) return;
 
-  if (!threat) {
+    if (!bot.heldItem) return;
 
-    if (blocking) {
-      bot.deactivateItem();
-      blocking = false;
-
-      console.log("[Shield] Lowered shield");
-
-      const player = bot.nearestEntity(
-        e => e.type === "player" &&
-             e.username !== bot.username
-      );
-
-      if (player) {
-        bot.pathfinder.setGoal(new GoalFollow(player, 3), true);
-      }
-    }
-
-    return;
-  }
-
-  const hasShield = await equipShield(bot);
-
-  if (!hasShield)
-    return;
-
-  const distance = bot.entity.position.distanceTo(threat.position);
-
-  let shouldBlock = false;
-
-  if (threat.name.includes("skeleton"))
-    shouldBlock = distance <= 10;
-
-  else if (threat.name === "creeper")
-    shouldBlock = distance <= 6;
-
-  else
-    shouldBlock = distance <= 2.8;
-
-  if (!shouldBlock) {
-
-    if (blocking) {
-      bot.deactivateItem();
-      blocking = false;
-    }
-
-    return;
-  }
-
-  if (!blocking) {
-
-    console.log(`[Shield] Blocking ${threat.name}`);
-
-    bot.pathfinder.setGoal(null);
-
-    await bot.lookAt(threat.position.offset(0, 1.6, 0), true);
+    shieldRaised = true;
 
     bot.activateItem(true);
 
-    blocking = true;
-  }
+    console.log("[Shield] Raised");
+}
+
+/**
+ * Lower shield
+ */
+function lowerShield(bot) {
+
+    if (!shieldRaised) return;
+
+    shieldRaised = false;
+
+    bot.deactivateItem();
+
+    console.log("[Shield] Lowered");
+}
+
+/**
+ * Should shield?
+ */
+function shouldBlock(bot) {
+
+    if (brain.is(brain.State.ESCAPE))
+        return true;
+
+    if (brain.is(brain.State.PVP))
+        return true;
+
+    return false;
+}
+
+/**
+ * Main updater
+ */
+function startShield(bot) {
+
+    stopShield();
+
+    updateInterval = setInterval(async () => {
+
+        // Higher priority states disable shield
+        if (
+            brain.is(brain.State.SLEEP) ||
+            brain.is(brain.State.EAT) ||
+            brain.is(brain.State.BRIDGE)
+        ) {
+
+            lowerShield(bot);
+            return;
+        }
+
+        // Shield missing
+        const hasShield = bot.inventory.items().some(i => i.name === "shield");
+
+        if (!hasShield) {
+            lowerShield(bot);
+            return;
+        }
+
+        // Equip if necessary
+        if (
+            !bot.inventory.slots[45] ||
+            bot.inventory.slots[45].name !== "shield"
+        ) {
+            await equipShield(bot);
+        }
+
+        if (shouldBlock(bot))
+            raiseShield(bot);
+        else
+            lowerShield(bot);
+
+    }, 300);
+
+    console.log("[Shield] Started");
+}
+
+/**
+ * Stop shield manager
+ */
+function stopShield() {
+
+    if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+    }
+
+    shieldRaised = false;
+}
+
+/**
+ * Cleanup
+ */
+function cleanup(bot) {
+
+    lowerShield(bot);
+
+    stopShield();
 }
 
 module.exports = {
-  useShield
+    startShield,
+    stopShield,
+    cleanup,
+    raiseShield,
+    lowerShield,
+    equipShield
 };

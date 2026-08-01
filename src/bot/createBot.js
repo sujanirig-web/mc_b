@@ -12,7 +12,7 @@ const { startAntiAfk } = require('./antiAfk');
 const { statusEmbed } = require('../discord/embeds');
 const { initSleep, sleepWithPlayer } = require('./sleep');
 const { avoidCreepers } = require('./creeper');
-const { useShield } = require('./shield');
+const { startShield } = require("./shield");
 const { startDashboardUpdater } = require('../dashboard/updater');
 
 
@@ -50,17 +50,26 @@ try {
     checkTimeoutInterval: 120000,
   });
 
+  state.currentBot = bot;
+
   // Load plugins
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvp);
   bot.loadPlugin(armorManager);
   if (autoeat) {
-    bot.loadPlugin(autoeat);
-    console.log("[AutoEat] Plugin loaded.");
-}
-console.log("bot.autoEat =", bot.autoEat);
-  state.currentBot = bot;
+   bot.loadPlugin(autoeat);
+   console.log("Has autoEat:", !!bot.autoEat);
 
+if (bot.autoEat) {
+    console.log("AutoEat methods:", Object.keys(bot.autoEat));
+}
+
+console.log("[AutoEat] Plugin loaded.");
+console.log("bot.autoEat =", bot.autoEat);
+console.log("Keys containing 'eat':",
+    Object.keys(bot).filter(k => k.toLowerCase().includes("eat"))
+);
+  }
   bot.on('login', () => {
   console.log('[Minecraft] Logged into server.');
 });
@@ -105,9 +114,7 @@ bot.on('error', (err) => {
     avoidCreepers(bot);
 }, 1000);
 
-setInterval(() => {
-    useShield(bot);
-}, 150);
+startShield(bot);
 
 const THREAD_ID = process.env.DISCORD_DASHBOARD_THREAD_ID;
 
