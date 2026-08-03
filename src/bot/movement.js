@@ -261,6 +261,7 @@ function shouldBridge(bot, target) {
   if (isBridging) return false;
   if (!target || !bot.entity) return false;
   if (bot.pvp?.target || bot.isSleeping) return false;
+  if (brain.is(brain.State.EAT)) return false;   // ✅ FIX: don't bridge while eating
   if (bot.entity.isInWater || bot.entity.isInLava) return false;
   if (Math.abs(bot.entity.velocity.y) > 0.5) return false;
 
@@ -297,16 +298,17 @@ function startFollowing(bot) {
   if (state.followInterval) clearInterval(state.followInterval);
 
   state.followInterval = setInterval(() => {
-    // Connection & state checks (silent)
+    // Connection & state checks
     if (!state.currentBot || state.currentBot !== bot || !state.wasConnected) {
       return;
     }
 
-    // Blocked by higher priority states
+    // Blocked by higher priority states (including EAT)
     if (brain.is(brain.State.PVP) ||
         brain.is(brain.State.ESCAPE) ||
         brain.is(brain.State.SLEEP) ||
-        brain.is(brain.State.BRIDGE)) {
+        brain.is(brain.State.BRIDGE) ||
+        brain.is(brain.State.EAT)) {   // ✅ FIX: don't run while eating
       return;
     }
 
@@ -396,7 +398,7 @@ function configurePathfinder(bot) {
   defaultMove.allowOpeningDoors = true;
   defaultMove.canOpenDoors = true;
 
-  // Avoid drops taller than 2 blocks
+  // Avoid drops taller than 2 blocks (height wary)
   defaultMove.maxDrop = 2;
 
   bot.pathfinder.setMovements(defaultMove);
