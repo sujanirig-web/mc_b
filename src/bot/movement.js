@@ -25,6 +25,9 @@ let lastPosition = null;
 let stuckTimer = null;
 let bridgeResolve = null;
 
+// ---------- Target rotation state ----------
+let targetSwitchTime = 0; // timestamp when current target was chosen
+
 // ---------- Helper Functions ----------
 
 /** Find a placeable block in the bot's inventory */
@@ -45,7 +48,6 @@ function findSupportAndFace(bot, placePos) {
     const supportPos = placePos.plus(offset);
     const block = bot.blockAt(supportPos);
     if (block && block.name !== 'air') {
-      // The face vector is the direction from supportPos to placePos
       const face = offset.scaled(-1);
       return { support: supportPos, face };
     }
@@ -65,12 +67,11 @@ function findFirstGap(bot, target) {
   for (let i = 1; i <= GAP_SCAN_RADIUS; i++) {
     const x = start.x + Math.round(dir.x * i);
     const z = start.z + Math.round(dir.z * i);
-    const y = start.y;                      // step level (feet)
+    const y = start.y;
     const pos = new Vec3(x, y, z);
     const block = bot.blockAt(pos);
     const below = bot.blockAt(pos.offset(0, -1, 0));
 
-    // Gap if the block is air and the block below is not solid (air, water, or lava)
     if (block && block.name === 'air' && below &&
         (below.name === 'air' || below.name.includes('water') || below.name.includes('lava'))) {
       return pos;
@@ -92,49 +93,40 @@ function startBridge(bot, target) {
     bridgeResolve = resolve;
     const dir = target.position.minus(bot.entity.position).normalize();
 
-    // 1. Find the gap
     const gapPos = findFirstGap(bot, target);
     if (!gapPos) {
       abortBridge(bot, false);
       return;
     }
 
-    // 2. Determine the edge block (the solid block just before the gap)
-    // The edge is the block behind the gap (one step back from gapPos)
-   let behind = gapPos.offset(-Math.round(dir.x), 0, -Math.round(dir.z));
+    let behind = gapPos.offset(-Math.round(dir.x), 0, -Math.round(dir.z));
     let edgeBlock = bot.blockAt(behind);
     if (!edgeBlock || edgeBlock.name === 'air') {
-      // Fallback: if behind is air, try to find the nearest solid block behind
       for (let i = 1; i <= GAP_SCAN_RADIUS; i++) {
         const backPos = gapPos.offset(-Math.round(dir.x) * i, 0, -Math.round(dir.z) * i);
         const block = bot.blockAt(backPos);
         if (block && block.name !== 'air') {
-         behind = backPos;
+          behind = backPos;
           break;
         }
       }
     }
-    // Verify we found a solid edge
     edgeBlock = bot.blockAt(behind);
     if (!edgeBlock || edgeBlock.name === 'air') {
       abortBridge(bot, false);
       return;
     }
 
-    // 3. Move to the edge block
     bridgeState = BridgeState.MOVING_TO_EDGE;
     bot.pathfinder.setGoal(new GoalNear(behind.x, behind.y, behind.z, 1));
 
-    // Wait until the bot is within 1.5 blocks of the edge
     const moveCheck = setInterval(() => {
       if (bot.entity.position.distanceTo(behind) < 1.5) {
         clearInterval(moveCheck);
-        // We are at the edge → start placing blocks sequentially
         bridgeForward(bot, gapPos, dir, target);
       }
     }, 200);
 
-    // Safety timeout: if we can't reach the edge within 5 seconds, abort
     setTimeout(() => {
       clearInterval(moveCheck);
       if (bridgeState === BridgeState.MOVING_TO_EDGE) {
@@ -146,24 +138,21 @@ function startBridge(bot, target) {
 
 /**
  * Continuously place blocks forward until the gap is bridged or we run out of blocks.
- * This creates a real bridge, one block at a time.
  */
 async function bridgeForward(bot, firstGapPos, dir, target) {
   bridgeState = BridgeState.PLACING;
 
   let currentGapPos = firstGapPos;
   let blocksPlaced = 0;
-  const maxBlocks = 6; // prevent infinite loops
+  const maxBlocks = 6;
 
   while (blocksPlaced < maxBlocks) {
-    // Check if we have blocks
     const blockItem = findPlaceableBlock(bot);
     if (!blockItem) {
       abortBridge(bot, false);
       return;
     }
 
-    // The block to place is the current gap position (the air block we step into)
     const placePos = currentGapPos;
     const support = findSupportAndFace(bot, placePos);
     if (!support) {
@@ -171,10 +160,8 @@ async function bridgeForward(bot, firstGapPos, dir, target) {
       return;
     }
 
-    // Sneak before placing
     bot.setControlState('sneak', true);
 
-    // Equip and place the block
     try {
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Placement timeout')), PLACEMENT_TIMEOUT_MS);
@@ -191,10 +178,8 @@ async function bridgeForward(bot, firstGapPos, dir, target) {
         });
       });
 
-      // Verify placement
       const placed = bot.blockAt(placePos);
       if (!placed || placed.name === 'air') {
-        // Retry once with the same support
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Retry timeout')), PLACEMENT_TIMEOUT_MS);
           bot.lookAt(placePos.offset(0.5, 0.5, 0.5), () => {
@@ -205,27 +190,20 @@ async function bridgeForward(bot, firstGapPos, dir, target) {
             });
           });
         });
-        // Verify again
         const placedAgain = bot.blockAt(placePos);
         if (!placedAgain || placedAgain.name === 'air') {
-          // Still failed – abort
           bot.setControlState('sneak', false);
           abortBridge(bot, false);
           return;
         }
       }
 
-      // Successfully placed one block
       blocksPlaced++;
       console.log(`[Bridge] Placed block ${blocksPlaced} at ${placePos}`);
 
-      // Move forward onto the new block: set a temporary GoalNear to stand on it
-      // The block we just placed is at (placePos.x, placePos.y, placePos.z)
-      // We want to stand on top of it: (placePos.x, placePos.y+1, placePos.z)
       const standPos = placePos.offset(0, 1, 0);
       bot.pathfinder.setGoal(new GoalNear(standPos.x, standPos.y, standPos.z, 1));
 
-      // Wait until we are on the new block
       await new Promise((resolve) => {
         const waitInterval = setInterval(() => {
           if (bot.entity.position.distanceTo(standPos) < 1.5) {
@@ -233,26 +211,19 @@ async function bridgeForward(bot, firstGapPos, dir, target) {
             resolve();
           }
         }, 200);
-        // Safety timeout: after 3 seconds, assume we're stuck and abort
         setTimeout(() => {
           clearInterval(waitInterval);
           resolve();
         }, 3000);
       });
 
-      // Now check if there is still a gap ahead (the next block)
-      const nextGap = findFirstGap(bot, target); // need target here – we don't have it directly
-      // We need the target from the outer scope; we'll pass it as an argument
-      // For simplicity, we'll use the dir to look ahead from current position.
       const nextPos = bot.entity.position.floored().plus(dir.scaled(2));
       const nextBlock = bot.blockAt(nextPos);
       const belowNext = bot.blockAt(nextPos.offset(0, -1, 0));
       if (!nextBlock || nextBlock.name !== 'air' ||
           (belowNext && belowNext.name !== 'air' && !belowNext.name.includes('water') && !belowNext.name.includes('lava'))) {
-        // No more gap – bridge is complete
         break;
       }
-      // Otherwise, continue: set currentGapPos to the new gap and loop
       currentGapPos = nextPos;
     } catch (err) {
       console.log(`[Bridge] Error while placing: ${err.message}`);
@@ -262,7 +233,6 @@ async function bridgeForward(bot, firstGapPos, dir, target) {
     }
   }
 
-  // All done – we bridged the gap (or ran out of blocks)
   bot.setControlState('sneak', false);
   finishBridge(bot, true);
 }
@@ -285,25 +255,19 @@ function abortBridge(bot, success) {
   }
 }
 
-// ---------- Public Interface for movement.js ----------
+// ---------- Public Interface ----------
 
-/**
- * Called inside the follow interval to detect if we are stuck and should bridge.
- * It returns false immediately; the actual bridge is started asynchronously.
- */
 function shouldBridge(bot, target) {
   if (isBridging) return false;
   if (!target || !bot.entity) return false;
   if (bot.pvp?.target || bot.isSleeping) return false;
   if (bot.entity.isInWater || bot.entity.isInLava) return false;
-  if (Math.abs(bot.entity.velocity.y) > 0.5) return false; // falling/jumping
+  if (Math.abs(bot.entity.velocity.y) > 0.5) return false;
 
   const currentPos = bot.entity.position.floored();
   if (lastPosition && currentPos.equals(lastPosition)) {
-    // We haven't moved since last tick
     if (!stuckTimer) {
       stuckTimer = setTimeout(() => {
-        // We are stuck – check if a gap exists
         const gap = findFirstGap(bot, target);
         if (gap && findPlaceableBlock(bot) && findSupportAndFace(bot, gap)) {
           startBridge(bot, target);
@@ -323,96 +287,83 @@ function shouldBridge(bot, target) {
   }
 }
 
-/**
- * This function is called from the follow loop as a no‑op because bridging is started by shouldBridge.
- * We keep it for compatibility.
- */
 function performBridge(bot, target) {
   return Promise.resolve(false);
 }
 
-// ---------- Main Following Loop ----------
+// ---------- Main Following Loop (sticky follow + 2‑min rotation) ----------
 function startFollowing(bot) {
   console.log("[Movement] startFollowing() called");
   if (state.followInterval) clearInterval(state.followInterval);
-state.followInterval = setInterval(() => {
 
-    console.log("========== FOLLOW LOOP ==========");
-
-    if (!state.currentBot) {
-        console.log("No currentBot");
-        return;
+  state.followInterval = setInterval(() => {
+    // Connection & state checks (silent)
+    if (!state.currentBot || state.currentBot !== bot || !state.wasConnected) {
+      return;
     }
 
-    if (state.currentBot !== bot) {
-        console.log("Wrong bot instance");
-        return;
+    // Blocked by higher priority states
+    if (brain.is(brain.State.PVP) ||
+        brain.is(brain.State.ESCAPE) ||
+        brain.is(brain.State.SLEEP) ||
+        brain.is(brain.State.BRIDGE)) {
+      return;
     }
 
-    if (!state.wasConnected) {
-        console.log("Not connected");
+    if (isBridging) return;
+
+    // --- Determine who to follow ---
+    let target = state.currentFollowTarget;
+    const now = Date.now();
+
+    if (target && target.isValid) {
+      // Target is valid – check rotation timer
+      const timeWithTarget = (now - targetSwitchTime) / 1000;
+      if (timeWithTarget >= 120) { // 2 minutes
+        // Look for other players within 50 blocks
+        const otherPlayers = Object.values(bot.entities)
+          .filter(e => e.type === 'player' && e.username !== bot.username && e !== target)
+          .filter(e => e.position.distanceTo(bot.entity.position) < 50);
+
+        if (otherPlayers.length > 0) {
+          // Switch to nearest other player
+          const newTarget = otherPlayers.reduce((a, b) =>
+            a.position.distanceTo(bot.entity.position) < b.position.distanceTo(bot.entity.position) ? a : b
+          );
+          console.log(`[Movement] Rotating target: ${target.username} → ${newTarget.username}`);
+          target = newTarget;
+          state.currentFollowTarget = target;
+          targetSwitchTime = now;
+        } else {
+          // No other players nearby – reset timer to avoid repeated checks
+          targetSwitchTime = now;
+        }
+      }
+      // else keep current target
+    } else {
+      // No valid target – pick the nearest player
+      target = bot.nearestEntity(e => e.type === "player" && e.username !== bot.username);
+      if (target) {
+        console.log(`[Movement] New follow target: ${target.username}`);
+        state.currentFollowTarget = target;
+        targetSwitchTime = now;
+      } else {
+        // No players online
+        state.currentFollowTarget = null;
+        bot.pathfinder.setGoal(null);
+        brain.setState(brain.State.IDLE);
         return;
+      }
     }
 
-    console.log("Passed connection checks");
+    // --- Follow logic ---
+    brain.setState(brain.State.FOLLOW);
+    shouldBridge(bot, target);
 
-    if (brain.is(brain.State.PVP)) {
-        console.log("Blocked by PVP");
-        return;
+    if (!isBridging) {
+      bot.pathfinder.setGoal(new GoalFollow(target, 3), true);
     }
-
-    if (brain.is(brain.State.ESCAPE)) {
-        console.log("Blocked by ESCAPE");
-        return;
-    }
-
-    if (brain.is(brain.State.SLEEP)) {
-        console.log("Blocked by SLEEP");
-        return;
-    }
-
-    if (brain.is(brain.State.BRIDGE)) {
-        console.log("Blocked by BRIDGE");
-        return;
-    }
-
-    console.log("Passed brain checks");
-
-    if (isBridging) {
-        console.log("Currently bridging");
-        return;
-    }
-
-    console.log("Looking for target...");
-
-    const target = bot.nearestEntity(
-        e => e.type === "player" && e.username !== bot.username
-    );
-
-    console.log("Target =", target?.username);
-
-if (!target) {
-    console.log("No player found.");
-    state.currentFollowTarget = null;
-    bot.pathfinder.setGoal(null);
-    brain.setState(brain.State.IDLE);
-    return;
-}
-
-console.log("Following", target.username);
-
-state.currentFollowTarget = target;
-brain.setState(brain.State.FOLLOW);
-
-// Check if we need to bridge
-shouldBridge(bot, target);
-
-// If we're already bridging, don't overwrite the bridge goal
-if (!isBridging) {
-    bot.pathfinder.setGoal(new GoalFollow(target, 3), true);
-}
-
-}, 1000);
+  }, 1000);
 }
 
 function stopFollowing() {
@@ -440,10 +391,14 @@ function configurePathfinder(bot) {
   const mcData = require('minecraft-data')(bot.version);
   const defaultMove = new Movements(bot, mcData);
   defaultMove.canDig = false;
-  defaultMove.allowParkour = false;      // prevent jumping into gaps
+  defaultMove.allowParkour = false;
   defaultMove.allowSprinting = true;
   defaultMove.allowOpeningDoors = true;
   defaultMove.canOpenDoors = true;
+
+  // Avoid drops taller than 2 blocks
+  defaultMove.maxDrop = 2;
+
   bot.pathfinder.setMovements(defaultMove);
 }
 
