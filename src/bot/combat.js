@@ -3,9 +3,7 @@
 const state = require("./state");
 const brain = require("./brain");
 
-
-let currentTarget = null;
-let followTarget = null;               // Added: target player to follow when far away
+let currentTarget = null;  // local combat target
 
 /**
  * Equip best weapon
@@ -49,9 +47,7 @@ async function startCombat(bot, target) {
   if (currentTarget === target && bot.pvp.target === target) return;
 
   currentTarget = target;
-
   brain.setState(brain.State.PVP);
-
   await equipWeapon(bot);
 
   try {
@@ -69,21 +65,18 @@ function stopCombat(bot) {
   if (bot.pvp.target) {
     bot.pvp.stop();
   }
-
   currentTarget = null;
-
-  if (brain.is(brain.State.PVP))
+  if (brain.is(brain.State.PVP)) {
     brain.setState(brain.State.FOLLOW);
+  }
 }
 
 /**
  * Someone attacked something
  */
 function handleEntityAttack(bot, attacker, victim) {
-
   if (!attacker || !victim) return;
 
-  // Ignore if busy
   if (
     brain.is(brain.State.SLEEP) ||
     brain.is(brain.State.EAT) ||
@@ -93,7 +86,6 @@ function handleEntityAttack(bot, attacker, victim) {
     return;
   }
 
-  // Protect player
   if (
     attacker.type === "mob" &&
     victim.type === "player" &&
@@ -107,7 +99,6 @@ function handleEntityAttack(bot, attacker, victim) {
  * Someone got hurt
  */
 function handleEntityHurt(bot, entity) {
-
   if (!entity) return;
 
   if (
@@ -123,109 +114,68 @@ function handleEntityHurt(bot, entity) {
     entity.type === "player" &&
     entity.username !== bot.username
   ) {
-
     const attacker = bot.nearestEntity(e =>
       e.type === "mob" &&
       e.position.distanceTo(entity.position) < 6
     );
-
-    if (attacker)
-      startCombat(bot, attacker);
+    if (attacker) startCombat(bot, attacker);
   }
 }
-
 
 /**
  * Re-equip weapon after collecting loot
  */
 function handlePlayerCollect(bot, collector) {
-
   if (!collector) return;
-
-  if (collector.username !== bot.username)
-    return;
+  if (collector.username !== bot.username) return;
 
   setTimeout(() => {
-
-    if (
-      brain.is(brain.State.PVP) &&
-      bot.pvp.target
-    ) {
+    if (brain.is(brain.State.PVP) && bot.pvp.target) {
       equipWeapon(bot);
     }
-
   }, 500);
 }
 
 /**
- * Call every second
+ * Call every second to clean up combat state
  */
 function updateCombat(bot) {
-
-  if (!brain.is(brain.State.PVP))
-    return;
+  if (!brain.is(brain.State.PVP)) return;
 
   if (!bot.pvp.target) {
     stopCombat(bot);
     return;
   }
-
   if (!bot.pvp.target.isValid) {
     stopCombat(bot);
     return;
   }
 
-  const dist = bot.entity.position.distanceTo(
-    bot.pvp.target.position
-  );
-
+  const dist = bot.entity.position.distanceTo(bot.pvp.target.position);
   if (dist > 25) {
     console.log("[Combat] Lost target.");
     stopCombat(bot);
   }
 }
 
-/* ---------- Added: follow when far away ---------- */
-
 /**
- * Set the player to follow when distance exceeds 155 blocks.
- * @param {Object} player - The player entity to follow.
- */
-function setFollowTarget(player) {
-  followTarget = player;
-}
-
-/**
- * Force the bot to stop everything and follow the target if it is more than 155 blocks away.
- * This overrides all current states (SLEEP, EAT, ESCAPE, BRIDGE, etc.).
- * Should be called periodically (e.g., in the main loop).
- * @param {Object} bot - The bot instance.
+ * Force-follow if the followed player is >155 blocks away.
+ * Overrides combat and any other state.
  */
 function forceFollowIfFar(bot) {
-  if (!followTarget) return;
+  // ✅ FIX: use state.currentFollowTarget set by movement.js
+  const target = state.currentFollowTarget;
+  if (!target) return;
+  if (!target.isValid) return;
 
-  // If target is dead or gone, clear it
-  if (!followTarget.isValid) {
-    followTarget = null;
-    return;
-  }
-
-  const dist = bot.entity.position.distanceTo(followTarget.position);
-
+  const dist = bot.entity.position.distanceTo(target.position);
   if (dist > 155) {
-    // Stop any active combat
     if (bot.pvp.target) {
       bot.pvp.stop();
     }
     currentTarget = null;
-
-    // Override any state and force FOLLOW
     brain.setState(brain.State.FOLLOW);
-
-    // Set the follow target so the follow module knows whom to track
-    state.followTarget = followTarget;
-
-    console.log(`[Combat] Force following ${followTarget.name} (distance ${Math.round(dist)})`);
+    console.log(`[Combat] Force following ${target.name} (distance ${Math.round(dist)})`);
   }
 }
 
@@ -236,6 +186,5 @@ module.exports = {
   updateCombat,
   startCombat,
   stopCombat,
-  setFollowTarget,     // Added export
-  forceFollowIfFar     // Added export
+  forceFollowIfFar   // ✅ FIX: removed setFollowTarget
 };
