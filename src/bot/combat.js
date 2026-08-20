@@ -32,6 +32,7 @@ async function equipWeapon(bot) {
  * Start attacking
  */
 async function startCombat(bot, target) {
+  if (state.aiEnabled) return;
   if (!target) return;
 
   // Don't interrupt higher priority states
@@ -75,6 +76,7 @@ function stopCombat(bot) {
  * Someone attacked something
  */
 function handleEntityAttack(bot, attacker, victim) {
+  if (!state.aiEnabled) return;
   if (!attacker || !victim) return;
 
   if (
@@ -99,6 +101,7 @@ function handleEntityAttack(bot, attacker, victim) {
  * Someone got hurt
  */
 function handleEntityHurt(bot, entity) {
+  if (!state.aiEnabled) return;
   if (!entity) return;
 
   if (

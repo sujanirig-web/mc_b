@@ -3,7 +3,7 @@
 
 const {
   handlePlayers, handlePos, handleHealth,
-  handleSay, handleStartServer, handleStopServer, handleReconnect, handleDisconnect,
+  handleSay, handleStartServer, handleStopServer, handleReconnect, handleDisconnect, handleAi,
 } = require('../discord/commands');
 
 const { getBot, reconnect, disconnectAndPauseRejoin, isBotOnline } = require('../bot/index.js');
@@ -65,6 +65,9 @@ function setupBridge(discordClient, sendEmbed) {
         embed = dumbfuckEmbed();
         reconnect(); 
       }
+      } else if (commandName === 'ai') {
+  embed = handleAi(member, interaction.options.getString('state'));
+
     } else {
       // General commands check bot status
       switch (commandName) {
@@ -113,6 +116,7 @@ function setupBridge(discordClient, sendEmbed) {
       case 'startserver': msg.reply({ embeds: [handleStartServer(msg.member, () => setTimeout(reconnect, 10000))] }); break;
       case 'stopserver': msg.reply({ embeds: [isBotOnline() ? handleStopServer(msg.member, bot) : notConnectedEmbed()] }); break;
       case 'disconnect': msg.reply({ embeds: [isBotOnline() ? handleDisconnect(msg.member, disconnectAndPauseRejoin) : notConnectedEmbed()] }); break;
+       case 'ai': msg.reply({ embeds: [handleAi(msg.member, args[0])] }); break; 
     }
   });
 }

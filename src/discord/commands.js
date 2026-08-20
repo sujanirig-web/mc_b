@@ -49,6 +49,13 @@ const slashCommands = [
   new SlashCommandBuilder()
     .setName('disconnect')
     .setDescription('🛡️ [Admin] Disconnect bot and pause 5-min rejoin'),
+    new SlashCommandBuilder()
+    .setName('ai')
+    .setDescription('[Admin] Toggle bot AI (movement, combat, etc.)')
+    .addStringOption(opt =>
+      opt.setName('state').setDescription('on or off').setRequired(true)),
+
+    
 ].map(cmd => cmd.toJSON());
 
 // ── Command handlers ──
@@ -197,6 +204,33 @@ function handleDisconnect(member, disconnectFn) {
     .setColor(EMBED_COLOR.disconnect)
     .setDescription(`${EMOJI.disconnect} ** disconnected**`);
 }
+function handleAi(member, stateValue) {
+  if (!isAdmin(member)) {
+    return new EmbedBuilder()
+      .setColor(EMBED_COLOR.disconnect)
+      .setDescription(`${EMOJI.error} **Access denied.** You need the admin role to use this.`);
+  }
+
+  const botState = require('../bot/state');
+  const val = stateValue?.toLowerCase();
+
+  if (val === 'on') {
+    botState.aiEnabled = true;
+    return new EmbedBuilder()
+      .setColor(EMBED_COLOR.connect)
+      .setDescription(`${EMOJI.connect} **AI enabled.** Bot will now follow, fight, shield, sleep, and evade. works only with 1.16.5`);
+  } else if (val === 'off') {
+    botState.aiEnabled = false;
+    return new EmbedBuilder()
+      .setColor(EMBED_COLOR.disconnect)
+      .setDescription(`${EMOJI.disconnect} **AI disabled.** Bot will stop moving, combat, shielding, sleeping, and creeper evasion.`);
+  } else {
+    return new EmbedBuilder()
+      .setColor(EMBED_COLOR.disconnect)
+      .setDescription(`${EMOJI.error} Invalid value. Use \`!ai on\` or \`!ai off\`.`);
+  }
+}
+
 
 module.exports = {
   slashCommands,
@@ -208,5 +242,6 @@ module.exports = {
   handleStopServer,
   handleReconnect,
   handleDisconnect,
+  handleAi,
   isAdmin,
 };

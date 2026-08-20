@@ -12,6 +12,7 @@ const state = {
   wasConnected: false,
   isRejoinCycle: false,
   isConnecting: false,
+  aiEnabled: true,
 
   // Discord integration
   sendEmbedFn: null,
@@ -55,6 +56,10 @@ module.exports = {
 
   get isConnecting() { return state.isConnecting; },
   set isConnecting(val) { state.isConnecting = val; },
+
+  get aiEnabled() {return state.aiEnabled;},
+  set aiEnabled(val) {state.aiEnabled = val;},
+
 
   get sendEmbedFn() { return state.sendEmbedFn; },
   set sendEmbedFn(fn) { state.sendEmbedFn = fn; },

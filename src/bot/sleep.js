@@ -1,5 +1,7 @@
 // src/bot/sleep.
 const brain = require("./brain");
+const state = require("./state");
+
 
 let sleepingTask = false;
 let sleepInterval = null;
@@ -128,6 +130,7 @@ sleepingTask = false;
  * if the followed player is sleeping, and act accordingly.
  */
 async function sleepWithPlayer() {
+  if (!state.aiEnabled) return;
   if (!botInstance || !followPlayer) return;
   console.log("[Sleep] Checking...");
 console.log("[Sleep] Following:", followPlayer);

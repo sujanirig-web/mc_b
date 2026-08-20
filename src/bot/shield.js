@@ -1,6 +1,7 @@
 // src/bot/shield.js
 
 const brain = require("./brain");
+const state = require("./state");
 
 let shieldRaised = false;
 let updateInterval = null;
@@ -42,6 +43,7 @@ function raiseShield(bot) {
  * Lower shield
  */
 function lowerShield(bot) {
+    
 
     if (!shieldRaised) return;
 
@@ -74,7 +76,7 @@ function startShield(bot) {
     stopShield();
 
     updateInterval = setInterval(async () => {
-
+        if (!state.aiEnabled) { lowerShield(bot); return;}
         // Higher priority states disable shield
         if (
             brain.is(brain.State.SLEEP) ||

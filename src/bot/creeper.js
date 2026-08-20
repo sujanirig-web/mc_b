@@ -3,6 +3,7 @@
 
 const { goals: { GoalNear } } = require('mineflayer-pathfinder');
 const Brain = require('./brain');
+const state = require('./state');
 
 let evading = false;
 let evadeInterval = null;
@@ -19,6 +20,7 @@ const EVADE_UPDATE = 500;
 // Public
 // =====================
 function avoidCreepers(bot) {
+  if (!state.aiEnabled) return;
 
   // Already escaping
   if (evading) return;

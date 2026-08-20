@@ -258,6 +258,7 @@ function abortBridge(bot, success) {
 // ---------- Public Interface ----------
 
 function shouldBridge(bot, target) {
+  if (!state.aiEnabled) return false;
   if (isBridging) return false;
   if (!target || !bot.entity) return false;
   if (bot.pvp?.target || bot.isSleeping) return false;
@@ -298,6 +299,7 @@ function startFollowing(bot) {
   if (state.followInterval) clearInterval(state.followInterval);
 
   state.followInterval = setInterval(() => {
+    if (!state.aiEnabled) return;
     // Connection & state checks
     if (!state.currentBot || state.currentBot !== bot || !state.wasConnected) {
       return;

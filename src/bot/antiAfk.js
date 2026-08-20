@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 //  antiAfk.js — keeps bot from being AFK kicked
 // ─────────────────────────────────────────────
-
+const state = require('./state');
 let afkInterval = null;
 
 function startAntiAfk(bot) {
@@ -9,6 +9,7 @@ function startAntiAfk(bot) {
 
   afkInterval = setInterval(() => {
     try {
+      if (!state.aiEnabled) return;
       // Random yaw (0 to 360°), keep pitch near 0
       const yaw = Math.random() * Math.PI * 2;
       const pitch = (Math.random() - 0.5) * 0.4;
